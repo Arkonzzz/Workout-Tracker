@@ -300,7 +300,7 @@
         let auth, db;
 
         function initFirebase() {
-            const app = initializeApp(FIREBASE_CONFIG);
+            const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
             return { auth, db };
