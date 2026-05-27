@@ -1,31 +1,30 @@
 // Firebase Configuration
-        const firebaseConfig = {
-        apiKey: "AIzaSyBfVoYvGGIKufCZJ6t8fk5Htqezkekp-1s",
-        authDomain: "workouttracker-ebfa9.firebaseapp.com",
-        projectId: "workouttracker-ebfa9",
-        storageBucket: "workouttracker-ebfa9.firebasestorage.app",
-        messagingSenderId: "343807132347",
-        appId: "1:343807132347:web:12fe85b7363c04852d1f9e",
-        measurementId: "G-YN4CSPVDER"
-        };
+const firebaseConfig = {
+    apiKey: "AIzaSyBfVoYvGGIKufCZJ6t8fk5Htqezkekp-1s",
+    authDomain: "workouttracker-ebfa9.firebaseapp.com",
+    projectId: "workouttracker-ebfa9",
+    storageBucket: "workouttracker-ebfa9.firebasestorage.app",
+    messagingSenderId: "343807132347",
+    appId: "1:343807132347:web:12fe85b7363c04852d1f9e",
+    measurementId: "G-YN4CSPVDER"
+};
 
 // Initialize Firebase
-const app = firebase.initializeApp(firebaseConfig);
+firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
 const { useState, useEffect } = React;
-const { addDoc, collection, getDocs, query, where, orderBy } = firebase.firestore;
 
 // Workout Split Data
 const WORKOUT_SPLIT = [
-    { name: 'Monday', exercises: ['Bench Press', 'Incline Dumbbell Press', 'Barbell Row', 'Lat Pulldown'] },
-    { name: 'Tuesday', exercises: ['Squat', 'Leg Press', 'Leg Curl', 'Leg Extension'] },
-    { name: 'Wednesday', exercises: [] },
-    { name: 'Thursday', exercises: ['Deadlift', 'Barbell Row', 'Pendlay Row', 'Face Pulls'] },
-    { name: 'Friday', exercises: ['Incline Dumbbell Press', 'Cable Flyes', 'Lateral Raises', 'Tricep Dips'] },
-    { name: 'Saturday', exercises: ['Romanian Deadlift', 'Leg Curl', 'Calf Raises', 'Ab Wheel'] },
-    { name: 'Sunday', exercises: [] }
+    { name: 'Push', exercises: ['Incline Bench Press', 'Shoulder Press', 'JM Press', 'Tricep Extension', 'Calve Raises'] },
+    { name: 'Pull', exercises: ['Weighted Pullups', 'Horizontal Row', 'Bicep Curl', 'Brachialis Curl', 'Forearm Flexor'] },
+    { name: 'Legs', exercises: ['Squat', 'SLDL', 'Leg Extension', 'Shoulder Abduction'] },
+    { name: 'Rest', exercises: [] },
+    { name: 'Upper', exercises: ['Weighted Pullups', 'Incline Bench Press', 'Shoulder Press', 'Bicep Curl', 'Tricep Extension'] },
+    { name: 'Lower', exercises: ['Squat', 'SLDL', 'Leg Extension', 'Calve Raises'] },
+    { name: 'Rest', exercises: [] }
 ];
 
 // Main App Component
@@ -104,7 +103,7 @@ function WorkoutApp() {
             return;
         }
         try {
-            await addDoc(collection(db, 'workouts'), {
+            await db.collection('workouts').add({
                 userId: user.uid,
                 exercise: currentSplit.exercises[idx],
                 weight: data.weight,
@@ -149,9 +148,11 @@ function WorkoutApp() {
     // Load workout history
     const loadHistory = async () => {
         try {
-            const q = query(collection(db, 'workouts'), where('userId', '==', user.uid), orderBy('date', 'desc'));
-            const snap = await getDocs(q);
-            setHistory(snap.docs.map(d => d.data()));
+            const snapshot = await db.collection('workouts')
+                .where('userId', '==', user.uid)
+                .orderBy('date', 'desc')
+                .get();
+            setHistory(snapshot.docs.map(doc => doc.data()));
             setView('history');
         } catch (err) {
             setError('Error loading history: ' + err.message);
