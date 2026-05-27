@@ -9,6 +9,12 @@
 <body>
     <div id="app"></div>
 
+    <!-- Show loading message -->
+    <script>
+        console.log('Page loading... checking dependencies');
+        document.getElementById('app').innerHTML = '<div style="text-align: center; padding: 2rem; color: #666;">Loading Workout Tracker...</div>';
+    </script>
+
     <!-- React and ReactDOM from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/react.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/react-dom.min.js"></script>
@@ -20,5 +26,15 @@
 
     <!-- Application Script -->
     <script src="app.js"></script>
+    
+    <!-- Fallback error message -->
+    <script>
+        setTimeout(() => {
+            if (document.getElementById('app').innerHTML.includes('Loading')) {
+                console.error('App failed to load!');
+                document.getElementById('app').innerHTML = '<div style="text-align: center; padding: 2rem; color: red;"><h1>Error Loading App</h1><p>Check the browser console (F12) for details.</p></div>';
+            }
+        }, 3000);
+    </script>
 </body>
 </html>
