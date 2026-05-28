@@ -39,6 +39,7 @@ function WorkoutApp() {
     const [currentDay, setCurrentDay] = useState(null);
     const [workoutData, setWorkoutData] = useState({});
     const [history, setHistory] = useState([]);
+    const [expandedExercise, setExpandedExercise] = useState(null);
 
     // Monitor Auth State
     useEffect(() => {
@@ -159,6 +160,17 @@ function WorkoutApp() {
         }
     };
 
+    // Get unique exercises from history
+    const getUniqueExercises = () => {
+        const exercises = [...new Set(history.map(h => h.exercise))];
+        return exercises.sort();
+    };
+
+    // Get history entries for specific exercise
+    const getExerciseHistory = (exerciseName) => {
+        return history.filter(h => h.exercise === exerciseName);
+    };
+
     // LOGIN VIEW
     if (!user) {
         return React.createElement('div', { className: 'min-height' },
@@ -253,24 +265,62 @@ function WorkoutApp() {
 
     // HISTORY VIEW
     if (view === 'history') {
+        const uniqueExercises = getUniqueExercises();
         return React.createElement('div', { className: 'container', style: { paddingTop: '1rem' } },
             React.createElement('div', { className: 'header' },
                 React.createElement('h1', null, 'Workout History'),
                 React.createElement('button', { className: 'btn-secondary', onClick: () => setView('splits') }, 'Back')
             ),
-            history.length === 0 ? React.createElement('div', { className: 'empty-state' }, 'No workout history yet') :
-            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.75rem' } },
-                history.map((entry, idx) =>
-                    React.createElement('div', { key: idx, className: 'card' },
-                        React.createElement('div', { className: 'meta' },
-                            React.createElement('strong', null, entry.exercise),
-                            React.createElement('span', null, new Date(entry.date.seconds * 1000).toLocaleDateString())
-                        ),
-                        React.createElement('p', { style: { color: '#6b7280', fontSize: '14px', margin: '0.25rem 0' } }, 
-                            `${entry.weight} lbs x ${entry.reps} reps @ ${entry.rir} RIR`
-                        ),
-                        entry.comments && React.createElement('p', { style: { color: '#9ca3af', fontSize: '14px' } }, `Note: ${entry.comments}`)
+            history.length === 0 ? 
+                React.createElement('div', { className: 'empty-state' },
+                    React.createElement('div', { className: 'empty-state-icon' }, '📊'),
+                    React.createElement('p', null, 'No workout history yet')
+                ) :
+            React.createElement('div', null,
+                React.createElement('div', { style: { marginBottom: '2rem' } },
+                    React.createElement('p', { style: { color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '0.75rem' } }, 
+                        `Total lifts tracked: ${history.length}`
                     )
+                ),
+                React.createElement('div', null,
+                    uniqueExercises.map((exercise, idx) => {
+                        const entries = getExerciseHistory(exercise);
+                        const isOpen = expandedExercise === exercise;
+                        return React.createElement('div', { key: idx, className: 'exercise-section' },
+                            React.createElement('div', {
+                                className: `exercise-header ${isOpen ? 'open' : ''}`,
+                                onClick: () => setExpandedExercise(isOpen ? null : exercise)
+                            },
+                                React.createElement('span', { className: 'exercise-name' }, exercise),
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '1rem' } },
+                                    React.createElement('span', { className: 'exercise-count' }, `${entries.length} lifts`),
+                                    React.createElement('span', { className: 'expand-icon' }, '▼')
+                                )
+                            ),
+                            isOpen && React.createElement('div', { className: 'exercise-entries' },
+                                entries.map((entry, entryIdx) =>
+                                    React.createElement('div', { key: entryIdx, className: 'entry-item' },
+                                        React.createElement('div', { className: 'entry-details' },
+                                            React.createElement('div', { className: 'entry-weight-reps' },
+                                                `${entry.weight} lbs × ${entry.reps} reps @ ${entry.rir} RIR`
+                                            ),
+                                            React.createElement('div', { className: 'entry-meta' },
+                                                new Date(entry.date.seconds * 1000).toLocaleDateString('en-US', { 
+                                                    weekday: 'short', 
+                                                    month: 'short', 
+                                                    day: 'numeric',
+                                                    year: 'numeric'
+                                                })
+                                            ),
+                                            entry.comments && React.createElement('div', { className: 'entry-comment' },
+                                                `Note: ${entry.comments}`
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        );
+                    })
                 )
             )
         );
