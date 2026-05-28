@@ -16,7 +16,59 @@ const db = firebase.firestore();
 
 const { useState, useEffect } = React;
 
-// Workout Split Data
+// Workout Split Templates
+const SPLIT_TEMPLATES = {
+    ppl: {
+        name: 'Push/Pull/Legs',
+        description: '3-day split',
+        days: [
+            { name: 'Push', exercises: ['Incline Bench Press', 'Shoulder Press', 'JM Press', 'Tricep Extension', 'Calve Raises'] },
+            { name: 'Pull', exercises: ['Weighted Pullups', 'Horizontal Row', 'Bicep Curl', 'Brachialis Curl', 'Forearm Flexor'] },
+            { name: 'Legs', exercises: ['Squat', 'SLDL', 'Leg Extension', 'Shoulder Abduction'] }
+        ]
+    },
+    upper_lower: {
+        name: 'Upper/Lower',
+        description: '4-day split',
+        days: [
+            { name: 'Upper A', exercises: ['Incline Bench Press', 'Weighted Pullups', 'Shoulder Press', 'Barbell Row', 'Bicep Curl'] },
+            { name: 'Lower A', exercises: ['Squat', 'Leg Press', 'Leg Curl', 'Leg Extension', 'Calve Raises'] },
+            { name: 'Upper B', exercises: ['Dumbbell Bench Press', 'Pulldowns', 'Lateral Raise', 'Machine Row', 'Tricep Extension'] },
+            { name: 'Lower B', exercises: ['Deadlift', 'Leg Press', 'Hamstring Curl', 'Leg Extension', 'Leg Press Calves'] }
+        ]
+    },
+    full_body: {
+        name: 'Full Body',
+        description: '3-day split',
+        days: [
+            { name: 'Day 1', exercises: ['Squat', 'Bench Press', 'Pendlay Row', 'Leg Press', 'Dumbbell Curl'] },
+            { name: 'Day 2', exercises: ['Deadlift', 'Incline Bench', 'Lat Pulldown', 'Leg Curl', 'Shoulder Press'] },
+            { name: 'Day 3', exercises: ['Front Squat', 'Machine Chest Press', 'Horizontal Row', 'Leg Extension', 'Tricep Pushdown'] }
+        ]
+    },
+    plp: {
+        name: 'Push/Legs/Pull',
+        description: '3-day split',
+        days: [
+            { name: 'Push', exercises: ['Bench Press', 'Shoulder Press', 'Incline Dumbbell Press', 'Tricep Extension', 'Lateral Raise'] },
+            { name: 'Legs', exercises: ['Squat', 'Romanian Deadlift', 'Leg Press', 'Leg Curl', 'Calve Raises'] },
+            { name: 'Pull', exercises: ['Pullups', 'Barbell Row', 'Lat Pulldown', 'Face Pulls', 'Barbell Curl'] }
+        ]
+    },
+    body_part: {
+        name: 'Body Part Split',
+        description: '5-day split',
+        days: [
+            { name: 'Chest', exercises: ['Bench Press', 'Incline Dumbbell Press', 'Cable Flyes', 'Machine Press', 'Dips'] },
+            { name: 'Back', exercises: ['Deadlift', 'Barbell Row', 'Pullups', 'Lat Pulldown', 'Face Pulls'] },
+            { name: 'Shoulders', exercises: ['Overhead Press', 'Lateral Raise', 'Reverse Flyes', 'Machine Shoulder Press', 'Shrugs'] },
+            { name: 'Legs', exercises: ['Squat', 'Leg Press', 'Leg Curl', 'Leg Extension', 'Calve Raises'] },
+            { name: 'Arms', exercises: ['Barbell Curl', 'Tricep Pushdown', 'Dumbbell Curl', 'Skull Crushers', 'Hammer Curls'] }
+        ]
+    }
+};
+
+// Legacy: Full week split for reference
 const WORKOUT_SPLIT = [
     { name: 'Push', exercises: ['Incline Bench Press', 'Shoulder Press', 'JM Press', 'Tricep Extension', 'Calve Raises'] },
     { name: 'Pull', exercises: ['Weighted Pullups', 'Horizontal Row', 'Bicep Curl', 'Brachialis Curl', 'Forearm Flexor'] },
@@ -40,6 +92,11 @@ function WorkoutApp() {
     const [workoutData, setWorkoutData] = useState({});
     const [history, setHistory] = useState([]);
     const [expandedExercise, setExpandedExercise] = useState(null);
+    const [customExercises, setCustomExercises] = useState([]);
+    const [newExerciseName, setNewExerciseName] = useState('');
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [selectedTemplate, setSelectedTemplate] = useState('ppl');
+    const [currentTemplate, setCurrentTemplate] = useState(SPLIT_TEMPLATES.ppl);
 
     // Monitor Auth State
     useEffect(() => {
@@ -74,9 +131,72 @@ function WorkoutApp() {
             setCurrentDay(null);
             setWorkoutData({});
             setHistory([]);
+            setCustomExercises([]);
+            setNewExerciseName('');
         } catch (err) {
             setError(err.message);
         }
+    };
+
+    // Add custom exercise
+    const addCustomExercise = () => {
+        if (!newExerciseName.trim()) {
+            setError('Please enter an exercise name');
+            return;
+        }
+        if (customExercises.includes(newExerciseName) || currentSplit.exercises.includes(newExerciseName)) {
+            setError('This exercise already exists');
+            return;
+        }
+        setCustomExercises([...customExercises, newExerciseName]);
+        setNewExerciseName('');
+        setError('');
+    };
+
+    // Mobile Sidebar Component
+    const renderSidebar = () => {
+        const menuItems = [
+            { label: 'Current Workout', icon: '▶', onClick: () => { setView('splits'); setSidebarOpen(false); } },
+            { label: 'Templates', icon: '📋', onClick: () => { setView('templates'); setSidebarOpen(false); } },
+            { label: 'Workout History', icon: '📊', onClick: () => { loadHistory(); setSidebarOpen(false); } },
+            { label: 'Custom Exercises', icon: '⚙', onClick: () => { setSidebarOpen(false); } },
+            { label: 'Logout', icon: '🚪', onClick: () => { handleLogout(); setSidebarOpen(false); } }
+        ];
+
+        return React.createElement('div', null,
+            // Sidebar overlay
+            sidebarOpen && React.createElement('div', { 
+                className: 'sidebar-overlay',
+                onClick: () => setSidebarOpen(false)
+            }),
+            // Sidebar panel
+            React.createElement('div', { className: `sidebar ${sidebarOpen ? 'open' : ''}` },
+                React.createElement('div', { className: 'sidebar-header' },
+                    React.createElement('h3', null, 'Menu'),
+                    React.createElement('button', { 
+                        className: 'sidebar-close',
+                        onClick: () => setSidebarOpen(false)
+                    }, '✕')
+                ),
+                React.createElement('div', { className: 'sidebar-menu' },
+                    menuItems.map((item, idx) =>
+                        React.createElement('button', {
+                            key: idx,
+                            className: 'sidebar-item',
+                            onClick: item.onClick
+                        },
+                            React.createElement('span', { className: 'sidebar-icon' }, item.icon),
+                            React.createElement('span', null, item.label)
+                        )
+                    )
+                )
+            ),
+            // Hamburger menu button (shown on mobile)
+            !sidebarOpen && React.createElement('button', {
+                className: 'hamburger-menu',
+                onClick: () => setSidebarOpen(true)
+            }, '☰')
+        );
     };
 
     // Get suggested weight based on history
@@ -189,6 +309,8 @@ function WorkoutApp() {
         }
         setCurrentDay(null);
         setView('splits');
+        setCustomExercises([]);
+        setNewExerciseName('');
     };
 
     // Load workout history
@@ -236,26 +358,30 @@ function WorkoutApp() {
 
     // SPLITS VIEW
     if (view === 'splits') {
-        return React.createElement('div', { className: 'container', style: { paddingTop: '2rem' } },
-            React.createElement('div', { className: 'header' },
-                React.createElement('h1', null, 'Workout Split'),
-                React.createElement('div', { className: 'button-group' },
-                    React.createElement('button', { className: 'btn-info', onClick: loadHistory }, 'History'),
-                    React.createElement('button', { className: 'btn-danger', onClick: handleLogout }, 'Logout')
-                )
-            ),
-            React.createElement('div', { className: 'split-grid' },
-                WORKOUT_SPLIT.map((day, idx) => 
-                    React.createElement('button', {
-                        key: idx,
-                        className: 'split-btn',
-                        disabled: day.exercises.length === 0,
-                        onClick: () => {
-                            setCurrentSplit(day);
-                            setCurrentDay(idx);
-                            setView('workout');
-                        }
-                    }, day.name + (day.exercises.length === 0 ? ' (Rest)' : ''))
+        const days = currentTemplate.days;
+        return React.createElement('div', { style: { display: 'flex', position: 'relative' } },
+            renderSidebar(),
+            React.createElement('div', { className: 'container', style: { paddingTop: '2rem', flex: 1 } },
+                React.createElement('div', { className: 'header' },
+                    React.createElement('h1', null, currentTemplate.name),
+                    React.createElement('div', { className: 'button-group' },
+                        React.createElement('button', { className: 'btn-info', onClick: loadHistory }, 'History'),
+                        React.createElement('button', { className: 'btn-danger', onClick: handleLogout }, 'Logout')
+                    )
+                ),
+                React.createElement('div', { className: 'split-grid' },
+                    days.map((day, idx) => 
+                        React.createElement('button', {
+                            key: idx,
+                            className: 'split-btn',
+                            disabled: day.exercises.length === 0,
+                            onClick: () => {
+                                setCurrentSplit(day);
+                                setCurrentDay(idx);
+                                setView('workout');
+                            }
+                        }, day.name + (day.exercises.length === 0 ? ' (Rest)' : ''))
+                    )
                 )
             )
         );
@@ -263,20 +389,32 @@ function WorkoutApp() {
 
     // WORKOUT VIEW
     if (view === 'workout' && currentSplit) {
-        return React.createElement('div', { className: 'container', style: { paddingTop: '1rem' } },
+        const allExercises = [...currentSplit.exercises, ...customExercises];
+        
+        return React.createElement('div', { style: { display: 'flex', position: 'relative' } },
+            renderSidebar(),
+            React.createElement('div', { className: 'container', style: { paddingTop: '1rem', flex: 1 } },
             React.createElement('div', { className: 'header' },
                 React.createElement('h1', null, currentSplit.name),
-                React.createElement('button', { className: 'btn-secondary', onClick: () => setView('splits') }, 'Back')
+                React.createElement('button', { className: 'btn-secondary', onClick: () => { setView('splits'); setCustomExercises([]); setNewExerciseName(''); } }, 'Back')
             ),
             error && React.createElement('div', { className: 'error' }, error),
             React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '2rem' } },
-                currentSplit.exercises.map((exercise, exerciseIdx) => {
+                allExercises.map((exercise, exerciseIdx) => {
+                    const isCustom = exerciseIdx >= currentSplit.exercises.length;
                     const key = `${currentDay}-${exerciseIdx}`;
                     const sets = workoutData[key] || [];
                     const suggested = getSuggestedWeight(exercise);
                     
                     return React.createElement('div', { key: exerciseIdx, className: 'exercise-card' },
-                        React.createElement('h2', null, exercise),
+                        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' } },
+                            React.createElement('h2', null, exercise),
+                            isCustom && React.createElement('button', { 
+                                className: 'btn-remove-exercise',
+                                onClick: () => setCustomExercises(customExercises.filter((_, idx) => idx !== exerciseIdx - currentSplit.exercises.length)),
+                                title: 'Remove custom exercise'
+                            }, '✕')
+                        ),
                         
                         // Display sets
                         sets.length > 0 && React.createElement('div', { className: 'sets-container' },
@@ -347,16 +485,78 @@ function WorkoutApp() {
                             )
                         )
                     );
-                })
+                }),
+                
+                // Add Custom Exercise Section
+                React.createElement('div', { className: 'add-exercise-card' },
+                    React.createElement('div', { className: 'form-group' },
+                        React.createElement('label', null, 'Add Custom Exercise'),
+                        React.createElement('div', { style: { display: 'flex', gap: '0.75rem' } },
+                            React.createElement('input', { 
+                                type: 'text', 
+                                value: newExerciseName, 
+                                onChange: (e) => setNewExerciseName(e.target.value),
+                                onKeyPress: (e) => e.key === 'Enter' && addCustomExercise(),
+                                placeholder: 'e.g., Machine Chest Press'
+                            }),
+                            React.createElement('button', { 
+                                className: 'btn-add-exercise',
+                                onClick: addCustomExercise
+                            }, 'Add')
+                        )
+                    )
+                )
             ),
             React.createElement('button', { className: 'btn-primary finish-btn btn-block', onClick: finishWorkout }, 'Finish Workout')
+            )
+        );
+    }
+
+    // TEMPLATES VIEW
+    if (view === 'templates') {
+        return React.createElement('div', { style: { display: 'flex', position: 'relative' } },
+            renderSidebar(),
+            React.createElement('div', { className: 'container', style: { paddingTop: '1rem', flex: 1 } },
+                React.createElement('div', { className: 'header' },
+                    React.createElement('h1', null, 'Workout Templates'),
+                    React.createElement('button', { className: 'btn-secondary', onClick: () => setView('splits') }, 'Back')
+                ),
+                React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '1rem' } },
+                    Object.entries(SPLIT_TEMPLATES).map(([key, template]) =>
+                        React.createElement('div', { 
+                            key: key,
+                            className: `template-card ${selectedTemplate === key ? 'selected' : ''}`
+                        },
+                            React.createElement('div', { style: { flex: 1 } },
+                                React.createElement('h2', null, template.name),
+                                React.createElement('p', { className: 'template-description' }, template.description),
+                                React.createElement('div', { className: 'template-days' },
+                                    template.days.map((day, idx) =>
+                                        React.createElement('span', { key: idx, className: 'template-day-badge' }, day.name)
+                                    )
+                                )
+                            ),
+                            React.createElement('button', {
+                                className: selectedTemplate === key ? 'btn-primary' : 'btn-accent',
+                                onClick: () => {
+                                    setSelectedTemplate(key);
+                                    setCurrentTemplate(template);
+                                    setView('splits');
+                                }
+                            }, selectedTemplate === key ? '✓ Selected' : 'Select')
+                        )
+                    )
+                )
+            )
         );
     }
 
     // HISTORY VIEW
     if (view === 'history') {
         const uniqueExercises = getUniqueExercises();
-        return React.createElement('div', { className: 'container', style: { paddingTop: '1rem' } },
+        return React.createElement('div', { style: { display: 'flex', position: 'relative' } },
+            renderSidebar(),
+            React.createElement('div', { className: 'container', style: { paddingTop: '1rem', flex: 1 } },
             React.createElement('div', { className: 'header' },
                 React.createElement('h1', null, 'Workout History'),
                 React.createElement('button', { className: 'btn-secondary', onClick: () => setView('splits') }, 'Back')
@@ -412,6 +612,7 @@ function WorkoutApp() {
                         );
                     })
                 )
+            )
             )
         );
     }
