@@ -86,34 +86,79 @@ function WorkoutApp() {
         return last.reps >= 8 ? last.weight + 5 : last.weight;
     };
 
-    // Handle exercise input changes
-    const handleExerciseChange = (idx, field, value) => {
-        const key = `${currentDay}-${idx}`;
-        setWorkoutData(prev => ({
-            ...prev,
-            [key]: { ...prev[key], [field]: field === 'weight' || field === 'reps' ? parseInt(value) || 0 : value }
-        }));
+    // Handle exercise input changes for specific set
+    const handleSetChange = (exerciseIdx, setIdx, field, value) => {
+        const key = `${currentDay}-${exerciseIdx}`;
+        setWorkoutData(prev => {
+            const exerciseSets = prev[key] || [];
+            const newSets = [...exerciseSets];
+            if (!newSets[setIdx]) {
+                newSets[setIdx] = { weight: '', reps: '', rir: 0, comments: '' };
+            }
+            newSets[setIdx] = { 
+                ...newSets[setIdx], 
+                [field]: field === 'weight' || field === 'reps' ? parseInt(value) || 0 : value 
+            };
+            return { ...prev, [key]: newSets };
+        });
     };
 
-    // Save exercise to Firestore
-    const saveExercise = async (idx) => {
-        const key = `${currentDay}-${idx}`;
-        const data = workoutData[key];
-        if (!data?.weight || !data?.reps) {
-            setError('Please enter weight and reps');
+    // Add a new set for an exercise
+    const addSet = (exerciseIdx) => {
+        const key = `${currentDay}-${exerciseIdx}`;
+        setWorkoutData(prev => {
+            const exerciseSets = prev[key] || [];
+            const lastSet = exerciseSets[exerciseSets.length - 1];
+            const newSet = {
+                weight: lastSet?.weight || '',
+                reps: lastSet?.reps || '',
+                rir: lastSet?.rir || 0,
+                comments: ''
+            };
+            return { ...prev, [key]: [...exerciseSets, newSet] };
+        });
+    };
+
+    // Delete a specific set
+    const deleteSet = (exerciseIdx, setIdx) => {
+        const key = `${currentDay}-${exerciseIdx}`;
+        setWorkoutData(prev => {
+            const exerciseSets = prev[key] || [];
+            const newSets = exerciseSets.filter((_, idx) => idx !== setIdx);
+            if (newSets.length === 0) {
+                const newData = { ...prev };
+                delete newData[key];
+                return newData;
+            }
+            return { ...prev, [key]: newSets };
+        });
+    };
+
+    // Save all sets for an exercise to Firestore
+    const saveExercise = async (exerciseIdx) => {
+        const key = `${currentDay}-${exerciseIdx}`;
+        const sets = workoutData[key];
+        if (!sets || sets.length === 0) {
+            setError('Please add at least one set');
+            return;
+        }
+        if (sets.some(s => !s.weight || !s.reps)) {
+            setError('Please fill weight and reps for all sets');
             return;
         }
         try {
-            await db.collection('workouts').add({
-                userId: user.uid,
-                exercise: currentSplit.exercises[idx],
-                weight: data.weight,
-                reps: data.reps,
-                rir: data.rir || 0,
-                comments: data.comments || '',
-                date: new Date(),
-                dayType: currentSplit.name
-            });
+            for (const set of sets) {
+                await db.collection('workouts').add({
+                    userId: user.uid,
+                    exercise: currentSplit.exercises[exerciseIdx],
+                    weight: set.weight,
+                    reps: set.reps,
+                    rir: set.rir || 0,
+                    comments: set.comments || '',
+                    date: new Date(),
+                    dayType: currentSplit.name
+                });
+            }
             setWorkoutData(prev => {
                 const newData = { ...prev };
                 delete newData[key];
@@ -125,9 +170,9 @@ function WorkoutApp() {
         }
     };
 
-    // Skip exercise
-    const skipExercise = (idx) => {
-        const key = `${currentDay}-${idx}`;
+    // Skip exercise entirely (don't save any sets)
+    const skipExercise = (exerciseIdx) => {
+        const key = `${currentDay}-${exerciseIdx}`;
         setWorkoutData(prev => {
             const newData = { ...prev };
             delete newData[key];
@@ -224,37 +269,82 @@ function WorkoutApp() {
                 React.createElement('button', { className: 'btn-secondary', onClick: () => setView('splits') }, 'Back')
             ),
             error && React.createElement('div', { className: 'error' }, error),
-            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '1.5rem' } },
-                currentSplit.exercises.map((exercise, idx) => {
-                    const key = `${currentDay}-${idx}`;
-                    const data = workoutData[key] || { weight: '', reps: '', rir: 0, comments: '' };
+            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '2rem' } },
+                currentSplit.exercises.map((exercise, exerciseIdx) => {
+                    const key = `${currentDay}-${exerciseIdx}`;
+                    const sets = workoutData[key] || [];
                     const suggested = getSuggestedWeight(exercise);
-                    return React.createElement('div', { key: idx, className: 'card' },
-                        React.createElement('h3', null, exercise),
-                        React.createElement('div', { className: 'grid-2' },
-                            React.createElement('div', { className: 'form-group' },
-                                React.createElement('label', null, 'Weight (lbs)'),
-                                React.createElement('input', { type: 'number', value: data.weight, onChange: (e) => handleExerciseChange(idx, 'weight', e.target.value), placeholder: suggested ? `${suggested}` : 'Weight' }),
-                                suggested && !data.weight && React.createElement('div', { className: 'hint' }, `Suggested: ${suggested} lbs`)
-                            ),
-                            React.createElement('div', { className: 'form-group' },
-                                React.createElement('label', null, 'Reps'),
-                                React.createElement('input', { type: 'number', min: 6, max: 8, value: data.reps, onChange: (e) => handleExerciseChange(idx, 'reps', e.target.value), placeholder: '6-8' })
+                    
+                    return React.createElement('div', { key: exerciseIdx, className: 'exercise-card' },
+                        React.createElement('h2', null, exercise),
+                        
+                        // Display sets
+                        sets.length > 0 && React.createElement('div', { className: 'sets-container' },
+                            sets.map((set, setIdx) =>
+                                React.createElement('div', { key: setIdx, className: 'set-row' },
+                                    React.createElement('div', { className: 'set-label' }, `SET ${setIdx + 1}`),
+                                    React.createElement('div', { className: 'set-inputs' },
+                                        React.createElement('div', { className: 'set-input-group' },
+                                            React.createElement('label', null, 'Weight'),
+                                            React.createElement('input', { 
+                                                type: 'number', 
+                                                value: set.weight, 
+                                                onChange: (e) => handleSetChange(exerciseIdx, setIdx, 'weight', e.target.value),
+                                                placeholder: 'lbs'
+                                            })
+                                        ),
+                                        React.createElement('div', { className: 'set-input-group' },
+                                            React.createElement('label', null, 'Reps'),
+                                            React.createElement('input', { 
+                                                type: 'number', 
+                                                value: set.reps, 
+                                                onChange: (e) => handleSetChange(exerciseIdx, setIdx, 'reps', e.target.value),
+                                                placeholder: 'reps'
+                                            })
+                                        ),
+                                        React.createElement('div', { className: 'set-input-group' },
+                                            React.createElement('label', null, 'RIR'),
+                                            React.createElement('select', { 
+                                                value: set.rir, 
+                                                onChange: (e) => handleSetChange(exerciseIdx, setIdx, 'rir', e.target.value)
+                                            },
+                                                [0, 1, 2, 3].map(i => React.createElement('option', { key: i, value: i }, i))
+                                            )
+                                        )
+                                    ),
+                                    React.createElement('button', { 
+                                        className: 'btn-delete-set',
+                                        onClick: () => deleteSet(exerciseIdx, setIdx),
+                                        title: 'Delete set'
+                                    }, '✕')
+                                )
                             )
                         ),
-                        React.createElement('div', { className: 'form-group' },
-                            React.createElement('label', null, 'RIR'),
-                            React.createElement('select', { value: data.rir, onChange: (e) => handleExerciseChange(idx, 'rir', e.target.value) },
-                                [0, 1, 2, 3].map(i => React.createElement('option', { key: i, value: i }, `${i} RIR`))
+                        
+                        // Comments input
+                        sets.length > 0 && React.createElement('div', { className: 'form-group' },
+                            React.createElement('label', null, 'Notes (applies to all sets)'),
+                            React.createElement('input', { 
+                                type: 'text', 
+                                value: sets[0]?.comments || '', 
+                                onChange: (e) => {
+                                    const newSets = sets.map((s, i) => i === 0 ? { ...s, comments: e.target.value } : s);
+                                    setWorkoutData(prev => ({ ...prev, [key]: newSets }));
+                                },
+                                placeholder: 'How did it feel?'
+                            })
+                        ),
+                        
+                        // Add set / Actions
+                        React.createElement('div', { className: 'set-actions' },
+                            React.createElement('button', { 
+                                className: 'btn-add-set',
+                                onClick: () => addSet(exerciseIdx)
+                            }, '+ Add set below'),
+                            sets.length > 0 && React.createElement('div', { style: { display: 'flex', gap: '0.75rem', flex: 1 } },
+                                React.createElement('button', { className: 'btn-success', onClick: () => saveExercise(exerciseIdx) }, 'Save'),
+                                React.createElement('button', { className: 'btn-danger-outline', onClick: () => skipExercise(exerciseIdx) }, 'Skip')
                             )
-                        ),
-                        React.createElement('div', { className: 'form-group' },
-                            React.createElement('label', null, 'Comments'),
-                            React.createElement('input', { type: 'text', value: data.comments, onChange: (e) => handleExerciseChange(idx, 'comments', e.target.value), placeholder: 'How did it feel?' })
-                        ),
-                        React.createElement('div', { className: 'exercise-actions' },
-                            React.createElement('button', { className: 'btn-success', onClick: () => saveExercise(idx) }, 'Save'),
-                            React.createElement('button', { className: 'btn-secondary', onClick: () => skipExercise(idx) }, 'Skip')
                         )
                     );
                 })
